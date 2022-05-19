@@ -1,0 +1,75 @@
+#main .nav-pills > li.active > a,
+#main .nav-pills > li.active > a:hover,
+#main .nav-pills > li.active > a:focus {
+   background-color: #507894;
+}
+
+#main .nav-pills > li > a:hover {
+  background-color: #507894;
+}
+
+h1,h2,h3,h4,h5,h6,legend{
+    color: #507894;
+}
+h1.title {
+  font-size: 38px;
+  color: #507894;
+  text-align: center;
+}
+h1.subtitle{
+  font-size: 20px;
+  text-align: center;
+  margin-top: 5px;
+
+}
+h3.subtitle {
+  font-size: 28px;
+  margin-top: 10px;
+  margin-bottom: 30px;
+  color: #507894;
+  text-align: center;
+}
+.btn {
+  border-width: 0 0px 0px 0px;
+  font-weight: normal;
+  text-transform: ;
+}
+.btn-default {
+  color: #507894;
+    background-color: #507894;
+    border-color: #507894;
+}
+
+h2, .h2 {
+    margin-top: 168px;
+    text-align: center;
+}
+h3, .h3 {
+    margin-top: 20px;
+    text-align: center;
+}
+
+#nav-top span.glyphicon {
+  color: #507894;
+}
+
+#table-of-contents header{
+    color:#507894;
+}
+
+#table-of-contents h2{
+    background-color:#507894;
+}
+
+#main a {
+    background-image: linear-gradient(180deg,#507894,#507894);
+    color:#507894;
+}
+
+a:hover{
+    color:#3d1308
+}
+
+a:visited{
+    color:#3d1308
+}
