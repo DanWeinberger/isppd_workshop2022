@@ -17,35 +17,23 @@ We are going to analyze some data on pneumonia mortality from Latin America. The
 
 
 ## Read in the time series data
-The data have already been formatted for your use. This is done using a procedure similar to what we did earlier in the semester when we were working with the data from Chile. 
+The data have already been formatted for your use. 
+
+- J12_J18_prim is deaths with an underlying cause of death of pneumonia
+
+- acm_noj_prim is number of deaths, excluding those with a respiratory cause (J chapter) listed
+
 
 ```{r}
-ds1<-read.csv('./Data/PAHO all age cuts_SubChapters.csv')
-
-#Guyana: use this one instead:
-#ds1<-read.csv('./time series data/quarterly_mortality_10_countries.csv')
-```
-
-subset the data to select which age groups we want and to remove the subnational data
-```{r }
-ds1<-ds1[grep('A',ds1$age_group, fixed=T),] #Filter to national level data
-
-ds1<-ds1[grep('2-59m',ds1$age_group, fixed=T),] #select age group
-
-unique(ds1$age_group)
-```
-
-## Select country
-```{r}
-ds1 <- ds1[substr(ds1$age_group,1,2)=='ec',] #SELECT COUNTRY HERE
+ds1 <- readRDS( './Data/ec_2_59m.rds')
 ```
 
 ## Specify dates of vaccine introduction
 For all of these methods we need to know when the vaccine was introduced
 
 ```{r}
-##CHANGE THIS DATE BASED ON YOUR COUNTRY
 vax.intro.date <- as.Date('2010-08-01') #when introduce vaccine?
+
 vax.eval.date <- as.Date('2011-08-01') #When start evaluation (usually at least 12 month after intro)
 
 ```
@@ -59,32 +47,28 @@ str(ds1)
 head(ds1)
 ```
 
-## Make sure R recognizes 'date' as a dat format
 
-```{r}
-ds1$date <- as.Date(ds1$monthdate, '%Y-%m-%d')
-```
 
 
 ## Let's plot the time series
 ```{r, fig.width=8, fig.height=3}
 
-p1 <- ggplot(ds1, aes(x=date, y=J12_J18_prim)) +
-      geom_line() +
-      ylab("J12-18, <1 yo") +
-      xlab("Date") +
-      theme_classic() +
-      theme(panel.spacing= unit(2,'lines') , axis.text.x=element_text(angle=90)) +
-      geom_hline(yintercept=0, col='gray', lty=2) 
+p1 <- ggplot(ds1, aes(x=date, y=J12_J18_prim)) + #define x and y 
+      geom_line() + #Specify that you want a line plot
+      ylab("J12-18, <1 yo") + #y axis label
+      xlab("Date") +  #x axis label
+      theme_classic() +  #Nice looking formayt
+      ylim(0, NA) + #extend axis to 0
+      geom_vline(xintercept=as.Date('2010-08-01'), col='red', lty=2) #reference line
    
    
 p2 <- ggplot(ds1, aes(x=date, y=acm_noj_prim)) +
-      geom_line() +
-      ylab("All-cause hospitalization, <1 yo") +
-      xlab("Date") +
-      theme_classic() +
-      theme(panel.spacing= unit(2,'lines') , axis.text.x=element_text(angle=90)) +
-      geom_hline(yintercept=0, col='gray', lty=2)   
+   geom_line() + #Specify that you want a line plot
+      ylab("All-cause, <1 yo") + #y axis label
+      xlab("Date") +  #x axis label
+      theme_classic() +  #Nice looking formayt
+      ylim(0, NA) + #extend axis to 0
+      geom_vline(xintercept=as.Date('2010-08-01'), col='red', lty=2) #reference line
 
 grid.arrange(p1,p2, nrow=1)
    
@@ -104,8 +88,9 @@ p1 <- ggplot(ds1, aes(x=date, y=J12_J18_prim)) +
 p1
 ```
 We will use negative binomial regression with these data. For *count* (number of deaths per month), we use either Poisson or negative binomial regression. We could use a Poisson regression, but often the data will be "overdispersed", and as a result, confidence intervals will be incorrectly tight. You can address this by using either as negative binomial regression, or a quassipoisson model, where you model the amount of unexplained variation
+
 ```{r}
-   mod1<-glm.nb(J12_J18_prim~date , data=ds1)
+   mod1 <- glm.nb(J12_J18_prim~date , data=ds1)
    summary(mod1)
 ```
 
@@ -173,7 +158,9 @@ p3
 ## Now lets test if the trend or level of disease changes 
 There are 3 ways we can do this. 
 1. Interrupted time series fits different line segments through the data and tests whether the slope or level of disease changes. This can sometimes result in weird jumps when fitting the model
+
 2. Spline model, which allows the slope to change in the post-vaccine period but forces the change to be smooth
+
 3. Fit the model to the pre-vaccine period only and extrapolate a trend to the post-vaccine period
 
 
@@ -215,13 +202,17 @@ p4
 
 
 Now get an estimate for the counterfactual (ie hold vaccine effect to 0 in the model)
+
 ```{r}
+#set the vacccine effect variables to 0
 ds1.counterfactual<-ds1
 ds1.counterfactual$period1<-0
 ds1.counterfactual$period2<-0
 
+#Generate the fitted values
 ds.pred.its$pred4.cf <- predict(mod3,type='response',newdata=ds1.counterfactual) #extract fitted value and add to ds1.pred
 
+#overlay onto plot
 p4 +
  geom_line(color='#e41a1c', lty=2,data=ds.pred.its, aes(x=date, y=pred4.cf))
 
@@ -358,8 +349,6 @@ ds.pred.mod5$rr.trend<-ds1$J12_J18_prim/ds.pred.mod5$pred.mod5
 p8 +  geom_line(color='#377eb8',lwd=1, lty=1,data=ds.pred.mod5, aes(x=date, y=rr.trend))
 
 ```
-
-
 
 
 ## look at rate ratio during the evaluation period

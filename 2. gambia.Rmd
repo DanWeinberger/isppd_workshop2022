@@ -10,12 +10,14 @@ output:
 
 ```{r, setup}
 library(zoo)
+library(htmlTable)
 library(lme4)
 library(lubridate)
 library(reshape2)
 library(MASS)
-library(dummies)
 library(ggplot2)
+source('./R/functions_its.R')
+
 ```
 
 ```{r, echo=F}
@@ -30,7 +32,7 @@ library(ggplot2)
 
 ## Note on the data
 
-The data we will be using today were collected as part of surveillance activities by the Medical Research Council (MRC) in The Gambia. They were shared by Dr. Grant MacKenzie and should not be re-used outside of this material without his written permission (gmackenzie@mrc.gm).
+The data we will be using today were collected as part of surveillance activities by the Medical Research Council (MRC) in The Gambia. They were shared by Dr. Grant MacKenzie and should not be re-used outside of this material without his written permission (gmackenzie@mrc.gm). The analyses here were developed by Dr. Nuredin Mohammed in collaboration with Dan Weinberger
 
 ## Today's goal
 
@@ -61,6 +63,8 @@ str(ds1)
 Declare the date variable as a date
 ```{r}
 ds1$date <- as.Date(ds1$date)
+
+ds1 <- ds1[order(ds1$date),]
 ```
 
 Dictionary: 
@@ -95,7 +99,8 @@ p1 <- ggplot(ds1.m, aes(x=date, y=value, color=variable)) +
       xlab("Date") +
       theme_classic() +
       geom_hline(yintercept=0, col='black', lty=1) +
-      scale_color_manual(values = c("#e41a1c", "#377eb8","#4daf4a","#984ea3"))
+      scale_color_manual(values = c("#e41a1c", "#377eb8","#4daf4a","#984ea3")) +
+      geom_vline(xintercept=as.Date(c('2009-01-01','2012-01-01')), col='gray', lty=2)
 p1
 ```
 
@@ -108,7 +113,8 @@ p2 <- ggplot(ds1.m, aes(x=date, y=value, color=variable)) +
       theme_classic() +
       geom_hline(yintercept=0, col='black', lty=1) +
       facet_wrap(~variable , scales='free') +
-      theme(panel.spacing= unit(2,'lines') , axis.text.x=element_text(angle=90)) 
+      theme(panel.spacing= unit(2,'lines') , axis.text.x=element_text(angle=90)) +
+      geom_vline(xintercept=as.Date(c('2009-01-01','2012-01-01')), col='gray', lty=2)
 p2
 ```
 
@@ -116,6 +122,7 @@ p2
 
 
 ## Setup variables needed for interrupted time series (ITS) model
+
 Will create disjointed segments
 ```{r}
 # Time index variable to control for long term linear trend
@@ -136,7 +143,10 @@ ds1$post2[ds1$date >= "2010-08-01" & ds1$date < "2012-05-01"] <- 1 # Post-PCV7 u
 ds1$post3[ds1$date >= "2012-05-01"] <- 1 # Post-PCV13
 # View(ds1)
 # Offset
-ds1$log_pop <- log(ds1$mppop)
+ds1$log_pop <- log(ds1$mppop + 0.5)
+
+time_points1 <- unique(ds1$date)
+
 ```
 
 ```{r}
@@ -152,7 +162,9 @@ p2.lab
 
 ```
 
-## ITS with time index variable, dummy variables for post periods, and their interactions
+## Step 1: What NOT to do: 
+ITS with time index variable, dummy variables for post periods, and their interactions
+--This is way too complicated of a model for 1 year of pre-vaccine data
 
 We will first work on the X-ray confirmed pneumonia (epc).
 
@@ -209,21 +221,6 @@ p4
 
 ```
 
- Plot: Rate ratio (Model-fitted / Counterfactual) 
-
-```{r}
-p4.rr <- ggplot(ds.mod1, aes(x=date, y=rr1.epc)) +
-      geom_line( col='gray') +
-      ylab("RR") +
-      xlab("Date") +
-      theme_classic() +
-      labs(title="Rate ratio (Model-fitted vs. Counterfactual)")+
-        geom_hline(yintercept=0, col='black', lty=1) +
-geom_vline(xintercept=as.Date(c('2009-08-01','2010-08-01',"2012-05-01")), col='red', lty=2)
-p4.rr
-
-```
-
 This counterfactual (red line in the plot) looks kind of crazy. Part of the problem is that we only have 1 year of pre vaccine data so can't really get a good estimate of the long-term trend. 
 
 Let's ditch trend and interaction between trend and post-period. We will then just be using the dummy variables to test whether the *average* number of cases changes.
@@ -242,54 +239,13 @@ mod2.epc <- glm.nb(epc ~ month +
 summary(mod2.epc)
 AIC(mod1.epc, mod2.epc)
 ```
+We can use some functions to make it easier to compare different models
+```{r, fig.width=8, fig.height=4}
+mod2.epc.alt <- step_func(ds=ds1, outcome_name='epc', denom='mppop', mod='negbin', other.covars='none')
 
-Generate fitted value and counterfactual
-```{r}
-# Model-fitted
-ds.mod2 <- ds1
-
-ds.mod2$pred.epc <- predict(mod2.epc, type='response', newdata=ds1)
-
-# Counterfactual
-ds1.counter <- ds.mod2
-ds1.counter$post1 <- 0
-ds1.counter$post2 <- 0
-ds1.counter$post3 <- 0
-ds.mod2$pred.epc.cf <- predict(mod2.epc, type='response', newdata=ds1.counter)
-
-# Rate ratio
-ds.mod2$rr2 <- ds.mod2$pred.epc/ds.mod2$pred.epc.cf
+plot.step.func(mod2.epc.alt)
 ```
 
-Plot the model fit
-```{r}
-
-p5 <- ggplot(ds.mod2, aes(x=date, y=epc)) +
-      geom_point( pch=16,col='gray') +
-      ylab("Number of pneumonia deaths") +
-      xlab("Date") +
-      theme_classic() +
-      geom_line(data=ds.mod2, aes(x=date, y=pred.epc), col='black', lty=2) +
-      geom_line(data=ds.mod2, aes(x=date, y=pred.epc.cf), col='red', lty=2) +
-      ylim(0, max(ds.mod2$epc))+
-      geom_hline(yintercept=0, col='black', lty=1) 
-p5
-
-```
-And the RR 
-
-```{r}
-p5.rr <- ggplot(ds.mod2, aes(x=date, y=rr2)) +
-      geom_line( col='gray') +
-      ylab("RR") +
-      xlab("Date") +
-      theme_classic() +
-      labs(title="Rate ratio (Model-fitted vs. Counterfactual)")+
-        geom_hline(yintercept=0, col='black', lty=1) +
-geom_vline(xintercept=as.Date(c('2009-08-01','2010-08-01',"2012-05-01")), col='red', lty=2)
-p5.rr
-
-```
 
 The AIC score is not notably different than the model with the interactions, and it looks a lot cleaner. 
 
@@ -311,9 +267,7 @@ In the function, we will use a Poisson regression (rather than negative binomial
 
 In one of the models, we will use linear *splines* for post periods, instead of dummy variables.
 
-```{r}
- source('./R/functions_its.R')
-```
+
 
 Ok now we are ready to call our model.
 
@@ -322,8 +276,6 @@ Ok now we are ready to call our model.
 #-----*-----*-----*-----*-----*-----*-----#
 # epc (X-ray confirmed pneumonia)
 #-----*-----*-----*-----*-----*-----*-----#
-
-time_points1 <- unique(ds1$date)
 
 # 5 models controllling for different sets of covariates
 # NOTE: all models control for seasonality (by monthly dummy variables) and population (offset)
@@ -378,10 +330,10 @@ Model E does best--adjusts for pneumococcal pneumonia (pcv13st is a subset of pn
 # spnpneumonia (Pneumococcal pneumonia)
 #-----*-----*-----*-----*-----*-----*-----*-----*-----#
 
-mod3a <- step_func(ds=ds1, outcome_name='spnpneumonia', denom='mppop', mod='negbin')
-mod3b <- step_func(ds=ds1, outcome_name='spnpneumonia', denom='mppop', mod='negbin', other.covars='xray' )
-mod3c <- step_func(ds=ds1, outcome_name='spnpneumonia', denom='mppop', mod='negbin', other.covars= c('time_index'))
-mod3d <- spline_func(ds=ds1,outcome_name='spnpneumonia', denom='mppop', mod='negbin', other.covars= c('xray'))
+mod3a <- step_func(ds=ds1, outcome_name='spnpneumonia', denom='mppop', mod='pois')
+mod3b <- step_func(ds=ds1, outcome_name='spnpneumonia', denom='mppop', mod='pois', other.covars='xray' )
+mod3c <- step_func(ds=ds1, outcome_name='spnpneumonia', denom='mppop', mod='pois', other.covars= c('time_index'))
+mod3d <- spline_func(ds=ds1,outcome_name='spnpneumonia', denom='mppop', mod='pois', other.covars= c('xray'))
 
 rr <- t(sapply(list(mod3a,mod3b, mod3c,mod3d), '[[','rr.q.post'))
 rr
@@ -391,7 +343,7 @@ dispersion <- t(sapply(list(mod3a,mod3b, mod3c,mod3d), '[[','overdispersion'))
 dispersion
 ```
 
-mod3c and mod3d are the best models.
+mod3c and mod3d are the best models. They give very different answers. Might consider looking at the counterfactual to see if anything ooks funny
 
 
 ```{r}
@@ -431,7 +383,7 @@ dispersion<-t(sapply(list(mod5a,mod5b, mod5c,mod5d), '[[','overdispersion'))
 dispersion
 ```
 
-Best model adjusts for Xrays and uses spline functions to connect post vaccine periods. The best model is not overdiserpsed, so stick with Poisson. (mod5a and mod5c are clearly overdispersed, so we can try negative binomial.)
+Best model (D) adjusts for Xrays and uses spline functions to connect post vaccine periods. The best model is not overdiserpsed, so stick with Poisson. (mod5a and mod5c are clearly overdispersed, so we can try negative binomial.)
 
 ## RRs by the best model for each outcome
 
@@ -447,6 +399,18 @@ row.names(rr.all) <- c('X-ray confirmed pneumonia','PCV13 serotypes','Pneumococc
 rr.all
 ```
 
+Or express as percent decline. We can use 'htmlTable' to generate a nice looking outcome
+
+```{r}
+pct.decline.all <- 100*(1-rr.all)
+
+PercentDecline <- paste0(pct.decline.all[,2], 
+       '%, (', 
+       pct.decline.all[,3] ,'%,',pct.decline.all[,1]  ,'%)'    )
+
+htmlTable(cbind(row.names(pct.decline.all), PercentDecline))
+```
+
 This demonstrates that the greatest declines were seen for pneumonia where there was a pneumococcus detected, which is what we would expect. Hypoxic pneumonia, a very severe form, also exhibited large declines. X-ray confirmed pneumonia is intermediate. And clinical pneumonia, the least specific of the definitions, exhibits the smallest declines.
 
 
@@ -454,7 +418,7 @@ This demonstrates that the greatest declines were seen for pneumonia where there
 
 Generate a plot of the observed data (dots), the fitted values (red line) and the counterfactual (blue line). Overall it looks OK. Some of the counterfactuals look a bit suspicious. Again this is partly due to fitting the model to having very few data points in the pre-vaccine period.
 
-```{r, fig.width=7, fig.height=3}
+```{r, fig.width=8, fig.height=3}
 for(i in 1:length(best.models)){
   plot.step.func(best.models[[i]])
   title(row.names(rr.all)[i])

@@ -25,7 +25,8 @@ step_func <- function(ds,
   ds$month<-month(ds$date)
   
   ds$month <-as.factor(ds$month)
-  month.dummies <- model.matrix(~month, data=ds)
+  month.dummies <- as.data.frame(model.matrix(~month, data=ds))
+  month.dummies <- month.dummies[,-1]
   
   ds$one<-1
   
@@ -34,7 +35,7 @@ step_func <- function(ds,
   ds$obs <- as.factor(1:nrow(ds))
   ds$log.offset<-log(ds[,denom]+0.5)
   
-  seas.vars<- c(names(month.dummies) )
+  seas.vars<- c(names(as.data.frame(month.dummies) ))
   offset.vars<-'offset(log.offset)'
   if((other.covars=='none')[1]){
     mod.vars<-c(seas.vars,vax.vars)
@@ -106,7 +107,7 @@ step_func <- function(ds,
   rr.q.post <- quantile(rr.post, probs = c(0.025, 0.5, 0.975))
   
   rr.out <- list('rr.q.post' = rr.q.post, 'aic1'=aic1,'outcome'=ds[,outcome_name],
-                 'preds.cf.q'=preds.cf.q,'preds.q'=preds.q,
+                 'preds.cf.q'=preds.cf.q,'preds.q'=preds.q,'form1'=form1,
                  'rr.q.t'=rr.q.t,'overdispersion'=overdispersion, 'dates'=ds$date)
   return(rr.out)
 }
@@ -164,7 +165,8 @@ spline_func <- function(ds,
  # month.dummies<-as.data.frame(dummies::dummy(ds$month))[,1:11]
   
   ds$month <-as.factor(ds$month)
-  month.dummies <- model.matrix(~month, data=ds)
+  month.dummies <- as.data.frame(model.matrix(~month, data=ds))
+  month.dummies <- month.dummies[,-1]
   
   ds$one<-1
   ds<-cbind.data.frame(ds, month.dummies)
@@ -172,7 +174,7 @@ spline_func <- function(ds,
   ds$obs <- as.factor(1:nrow(ds))
   ds$log.offset<-log(ds[,denom]+0.5)
   
-  seas.vars<- c(names(month.dummies) )
+  seas.vars<- c(names(as.data.frame(month.dummies) ))
   offset.vars<-'offset(log.offset)'
   if((other.covars=='none')[1]){
     mod.vars<-c(seas.vars,vax.vars)
@@ -241,7 +243,7 @@ spline_func <- function(ds,
   rr.q.post <- quantile(rr.post, probs = c(0.025, 0.5, 0.975))
   
   rr.out <- list('rr.q.post' = rr.q.post, 'aic1'=aic1,'outcome'=ds[,outcome_name],
-                 'preds.cf.q'=preds.cf.q,'preds.q'=preds.q,
+                 'preds.cf.q'=preds.cf.q,'preds.q'=preds.q, 'form1'=form1,
                  'rr.q.t'=rr.q.t,'overdispersion'=overdispersion, 'dates'=ds$date)
   return(rr.out)
 }
