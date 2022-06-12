@@ -104,17 +104,12 @@ p1 <- ggplot(ds1.m, aes(x=date, y=value, color=variable)) +
 p1
 ```
 
-Separate axes for each
+Separate axes for each. Add a facet wrap
 ```{r}
-p2 <- ggplot(ds1.m, aes(x=date, y=value, color=variable)) +
-      geom_line() +
-      ylab("Number of pneumonia deaths") +
-      xlab("Date") +
-      theme_classic() +
-      geom_hline(yintercept=0, col='black', lty=1) +
+p2 <-p1 +
       facet_wrap(~variable , scales='free') +
-      theme(panel.spacing= unit(2,'lines') , axis.text.x=element_text(angle=90)) +
-      geom_vline(xintercept=as.Date(c('2009-01-01','2012-01-01')), col='gray', lty=2)
+      theme(panel.spacing= unit(2,'lines') , axis.text.x=element_text(angle=90)) 
+      
 p2
 ```
 
@@ -142,29 +137,17 @@ ds1$post1[ds1$date >= "2009-08-01" & ds1$date < "2010-08-01"] <- 1 # First year 
 ds1$post2[ds1$date >= "2010-08-01" & ds1$date < "2012-05-01"] <- 1 # Post-PCV7 until PCV13 intro
 ds1$post3[ds1$date >= "2012-05-01"] <- 1 # Post-PCV13
 # View(ds1)
-# Offset
+
+# Offset is entered into the model as LOG of population size
 ds1$log_pop <- log(ds1$mppop + 0.5)
 
 time_points1 <- unique(ds1$date)
 
 ```
 
-```{r}
-# Visualize the period when PCV7 and then PCV13 were introduced
-
-
-
-p2.lab <-p2 +  geom_vline(xintercept=as.Date(c( "2009-10-01","2012-05-01") ), col='gray', lty=2) +
-
-      scale_color_manual(values = c("#e41a1c", "#377eb8","#4daf4a","#984ea3")) 
-  
-p2.lab
-
-```
-
 ## Step 1: What NOT to do: 
 ITS with time index variable, dummy variables for post periods, and their interactions
---This is way too complicated of a model for 1 year of pre-vaccine data
+--This is way too complicated of a model for 1 year of pre-vaccine data. Remembe: the counterfactual is based only on what happens during the pre-vaccine periods.
 
 We will first work on the X-ray confirmed pneumonia (epc).
 
