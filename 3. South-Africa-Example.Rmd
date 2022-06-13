@@ -82,7 +82,7 @@ head(d2)
 
 ```
 
-Plot covariates
+Plot covariates. Note a problem with certain covariates in the youngest age group related to a shift in coding practices
 ```{r, fig.width=8, fig.height=8}
 d2.m <- melt(d2, id.vars=c('date', 'age'))
 
@@ -95,6 +95,16 @@ d2.m <- melt(d2, id.vars=c('date', 'age'))
       geom_hline(yintercept=0, col='gray', lty=2) +
    facet_wrap(~variable, scales='free')
  p2
+ 
+  p3 <- ggplot(d2.m[d2.m$age=="1-4 years",], aes(x=date, y=value, group=age)) +
+     geom_line() +
+      facet_wrap(~age , scales='free') +
+      theme_classic() +
+     ylab("Number of control deaths") +
+      xlab("Date") + 
+      geom_hline(yintercept=0, col='gray', lty=2) +
+   facet_wrap(~variable, scales='free')
+ p3
 ```
 
 
