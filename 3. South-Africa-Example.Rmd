@@ -37,6 +37,7 @@ library(httr)
 library(pbapply)
 library(INLA)
 library(xtable)
+library(reshape2)
 library(ggplot2)
 
 ```
