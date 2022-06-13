@@ -57,7 +57,7 @@ South Africa introduced PCV7 in 2009. Estimating the impact of the vaccine on mo
 
 ## Read in and explore data
 ```{r}
-d2 <- read.csv('./Data/RSA.csv') #imports file into R and saves as object 'd2'
+d2 <- readRDS('./Data/RSA.rds')
 ```
 
 ### Look at the first few lines
@@ -65,113 +65,38 @@ d2 <- read.csv('./Data/RSA.csv') #imports file into R and saves as object 'd2'
 head(d2)
 ```
 
-Make sure R knows that the 'date' variable is a date. We tell it tha the date has a 4 digit year (%Y), a 2 digit month (%m), and 2 digit day (%d), separated by dashes.
-```{r}
-d2$date<-as.Date(d2$date,"%Y-%m-%d")
-```
 
 
-### Exclude certain covariates
-```{r}
-exclude_covar <- c("denom", "A20_B99_excl_bac", "A16", "A17", "A18", "A19", "R00_R09", "R10_R19", "R20_R39", "R40_R49", "R50_R69", "R70_R94", "R95_R99", "D50_D89")      
+## Plot your outcome time series
 
-d2 <- d2[,-which(names(d2) %in% exclude_covar)]
-
-d2 <-
-  d2[, c(
-    'date',
-    'age',
-    'Pneum',
-    "A16_A19",
-    "A20_A48",
-    "A39",
-    "A50_A79",
-    "A80_B34",
-    "B05_B06",
-    "B20_B24",
-    "B35_B49" ,
-    "B45",
-    "B50_B89",
-    "B99" ,
-    "C00_D49" ,
-    "A20_B99_a_D50_D89" ,
-    "E00_E89"      ,
-    "E10_E14"  ,
-    "E40_E46",
-    "F01_F99"   ,
-    "G05_G99"   ,
-    "H00_H99_excl_cj_om",
-    "I00_I99"  ,
-    "I60_I64"   ,
-    "K00_K95"   ,
-    "K35"  ,
-    "K80"   ,
-    "L00_L99"       ,
-    "M00_M99"   ,
-    "N00_N99"  ,
-    "N39"     ,
-    "O00_O99"       ,
-    "P00_P15" ,
-    "P05_P07",
-    "Q00_Q99"      ,
-    "R00_R99"   ,
-    "S00_T88"  ,
-    "V01_Y99"
-  )]
-
-```
-
-Subset to a few age groups for analysis
-
-```{r}
-d2 <- d2[d2$age %in% c('1-11 months', '1-4 years','65-79 years'),]
-```
-
-
-
-## Plot your time series
-We will build up a nicer looking plot. First, we have all 3 time series on same plot area.
 ```{r, fig.width=8, fig.height=3}
 
  p1 <- ggplot(d2, aes(x=date, y=Pneum, group=age)) +
-      geom_line() 
-
-```
-
-use a 'facet_wrap" to create a different plot for each age group. scales='free' allows the axis range to differ for each plot
-```{r, fig.width=8, fig.height=3}
-
- p2 <- ggplot(d2, aes(x=date, y=Pneum, group=age)) +
-      geom_line() +
-      facet_wrap(~age , scales='free') 
-p2
-
-```
-Use "classic" theme--gets rid of gray background
-
-```{r, fig.width=8, fig.height=3}
-
- p3 <- ggplot(d2, aes(x=date, y=Pneum, group=age)) +
-      geom_line() +
-      facet_wrap(~age , scales='free') +
-      theme_classic()
-p3
-
-```
-Add labels and reference line a y=0 (this also automatically extends the axis down to 0, which is desirable)
-
-```{r, fig.width=8, fig.height=3}
-
- p4 <- ggplot(d2, aes(x=date, y=Pneum, group=age)) +
       geom_line() +
       facet_wrap(~age , scales='free') +
       theme_classic() +
      ylab("Number of pneumonia deaths") +
       xlab("Date") + 
       geom_hline(yintercept=0, col='gray', lty=2) 
- p4
+ p1
 
 ```
+
+Plot covariates
+```{r, fig.width=8, fig.height=8}
+d2.m <- melt(d2, id.vars=c('date', 'age'))
+
+ p2 <- ggplot(d2.m[d2.m$age=="1-11 months",], aes(x=date, y=value, group=age)) +
+     geom_line() +
+      facet_wrap(~age , scales='free') +
+      theme_classic() +
+     ylab("Number of control deaths") +
+      xlab("Date") + 
+      geom_hline(yintercept=0, col='gray', lty=2) +
+   facet_wrap(~variable, scales='free')
+ p2
+```
+
 
 
 ## Set parameters for analysis with InterventionEvaluatR
