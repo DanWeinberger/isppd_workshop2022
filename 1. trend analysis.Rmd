@@ -13,7 +13,7 @@ library(gridExtra)
 ```
 
 ## Introduction
-We are going to analyze some data on pneumonia mortality from Latin America. These data were drawn from the national mortality registers that we learned about earlier and were formatted into time series in a similar method to what you did previously. 
+We are going to analyze some data on pneumonia mortality from Ecuador. These data were drawn from a national mortality registers and were formatted into time series. The original paper describing these analyses by Oliveira and Shioda can be found: https://pubmed.ncbi.nlm.nih.gov/32448889/
 
 
 ## Read in the time series data
@@ -28,16 +28,6 @@ The data have already been formatted for your use.
 ds1 <- readRDS( './Data/ec_2_59m.rds')
 ```
 
-## Specify dates of vaccine introduction
-For all of these methods we need to know when the vaccine was introduced
-
-```{r}
-vax.intro.date <- as.Date('2010-08-01') #when introduce vaccine?
-
-vax.eval.date <- as.Date('2011-08-01') #When start evaluation (usually at least 12 month after intro)
-
-```
-
 ## Have a look at the data structure
 ```{r}
 str(ds1)
@@ -48,12 +38,22 @@ head(ds1)
 ```
 
 
+## Specify dates of vaccine introduction
+For all of these methods we need to know when the vaccine was introduced
+
+```{r}
+#YYYY-MM-DD
+vax.intro.date <- as.Date('2010-08-01') #when introduce vaccine?
+
+vax.eval.date <- as.Date('2011-08-01') #When start evaluation (usually at least 12 month after intro)
+
+```
 
 
 ## Let's plot the time series
 ```{r, fig.width=8, fig.height=3}
 
-p1 <- ggplot(ds1, aes(x=date, y=J12_J18_prim)) + #define x and y 
+p1 <- ggplot(ds1, aes(x=date, y=J12_J18_prim)) + #define x and y
       geom_line() + #Specify that you want a line plot
       ylab("J12-18, <1 yo") + #y axis label
       xlab("Date") +  #x axis label
@@ -90,7 +90,10 @@ p1
 We will use negative binomial regression with these data. For *count* (number of deaths per month), we use either Poisson or negative binomial regression. We could use a Poisson regression, but often the data will be "overdispersed", and as a result, confidence intervals will be incorrectly tight. You can address this by using either as negative binomial regression, or a quassipoisson model, where you model the amount of unexplained variation
 
 ```{r}
-   mod1 <- glm.nb(J12_J18_prim~date , data=ds1)
+
+ds1$index <- 1:nrow(ds1)
+
+   mod1 <- glm.nb(J12_J18_prim ~ index , data=ds1)
    summary(mod1)
 ```
 
@@ -99,26 +102,22 @@ extract the fitted values and plot them
 
 ds1.pred <- cbind.data.frame(ds1,'pred'=predict(mod1,type='response'))
 
-p1 <- ggplot(ds1, aes(x=date, y=J12_J18_prim)) +
-      geom_point() +
-      ylab("J12-18, <1 yo") +
-      xlab("Date") +
-      theme_classic() +
-      theme(panel.spacing= unit(2,'lines') , axis.text.x=element_text(angle=90)) +
-      geom_hline(yintercept=0, col='gray', lty=2) +
+p1a <- p1 +
       geom_line(color='#e41a1c', data=ds1.pred, aes(x=date, y=pred))
    
-p1
+p1a
+
 ```
 #Let's control for seasonality
 Use a monthly 'dummy' variable that allows each month to have a different average
 ```{r}
 ds1$month<-as.factor(month(ds1$date)) #create as a factor variable
+
 ds1$month[1:36] #print first 36 observations
 ```
 fit updated model
 ```{r}
-mod1a<-glm.nb(J12_J18_prim~date +month, data=ds1)
+mod1a <- glm.nb(J12_J18_prim~date +month, data=ds1)
 summary(mod1a)
 ```
 
@@ -126,7 +125,7 @@ summary(mod1a)
 ```{r}
 ds1.pred1 <- cbind.data.frame(ds1.pred,'pred2'=predict(mod1a,type='response')) #extract fitted value and add to ds1.pred
 
-p2 <- p1 +
+p2 <- p1a +
       geom_line(color='#377eb8', data=ds1.pred1, aes(x=date, y=pred2))
 
 p2
@@ -136,12 +135,12 @@ p2
 
 We might want to add an 'offset' variable that is used as a denominator. This could be population size; or all-non-respiratory causes of mortality 
 ```{r}
-ds1$log.offset<-log(ds1$acm_noj_prim)
+ds1$log.offset <- log(ds1$acm_noj_prim)
 ```
 
 refit the model with an offset and look at results
 ```{r}
-  mod2<-glm.nb(J12_J18_prim~date +month+ offset(log.offset) , data=ds1)
+  mod2<-glm.nb(J12_J18_prim~ index +month+ offset(log.offset) , data=ds1)
    summary(mod2)
 ```
 
@@ -155,11 +154,13 @@ p3 <- p2+
 p3
 
 ```
-## Now lets test if the trend or level of disease changes 
-There are 3 ways we can do this. 
-1. Interrupted time series fits different line segments through the data and tests whether the slope or level of disease changes. This can sometimes result in weird jumps when fitting the model
 
-2. Spline model, which allows the slope to change in the post-vaccine period but forces the change to be smooth
+## Now lets test if the trend or level of disease changes 
+
+There are 3 ways we can do this. 
+1. Interrupted time series with discontiguous segments. This fits different line segments through the data and tests whether the slope or level of disease changes. This can sometimes result in weird jumps when fitting the model
+
+2. Interrupted time series with connected segments (Spline model), which allows the slope to change in the post-vaccine period but forces the change to be smooth
 
 3. Fit the model to the pre-vaccine period only and extrapolate a trend to the post-vaccine period
 
@@ -167,22 +168,26 @@ There are 3 ways we can do this.
 ## Method 1. Interrupted time series
 First create 'dummy variables' that are 0 before introduction and 1 during the 
 ```{r}
-ds1$period1<-0
-ds1$period2<-0
+ds1$period1 <- 0
+ds1$period2 <- 0
 
-ds1$period1[ds1$date>=vax.intro.date]<-1
-ds1$period2[ds1$date>=vax.eval.date]<-1
+ds1$period1[ds1$date>=vax.intro.date] <- 1
 
-ds1$index<-1:nrow(ds1)
+ds1$period2[ds1$date>=vax.eval.date] <- 1
+
 ds1[,c('date','index','period1','period2')]
 ```
 
-Ok, now let's fit our ITS model and look at results 
+Ok, now let's fit our ITS model and look at results .
+
+We will start with a simple step-change model to see if the average number of cases changes
+
 ```{r}
   mod3<-glm.nb(J12_J18_prim~index +month+ 
-                 period1 +period1*index +
-                 period2 +period2*index+ #change in disease during evaluation period
+                 period1  +
+                 period2 + #change in disease during evaluation period
                  offset(log.offset) , data=ds1)
+
 summary(mod3)
 ```
 
@@ -237,20 +242,34 @@ p6
 ```
 
 
-## Approach 2: Spline model
+We could also try a slightly more complicated model where the slope of the line is also allowed to vary in the post vaccine period. This shows that the AIC score is worse (higher score) than the model that just accounts for a step change; so we will prefer that simpler model.
+
+```{r}
+  mod3a <- glm.nb(J12_J18_prim~index +month+ 
+                 period1  + period1*index +
+                 period2 + period2*index + #change in disease during evaluation period
+                 offset(log.offset) , data=ds1)
+
+ summary( mod3a)
+AIC(mod3, mod3a)
+```
+
+
+## Approach 2: ITS Spline model
+
 In this case, we force the changes to be smooth so that we don't get the weird jumps like in the ITS example
 
 ```{r}
-ds1$index<-1:nrow(ds1)
-intro.index<-which(ds1$date==vax.intro.date)
-eval.index<-which(ds1$date==vax.eval.date)
+intro.index <- which(ds1$date==vax.intro.date)
+eval.index <- which(ds1$date==vax.eval.date)
 
-ds1$spl1<-ds1$index - intro.index
-ds1$spl2<-ds1$index - eval.index
+ds1$spl1<-ds1$index - intro.index +1
+ds1$spl2<-ds1$index - eval.index +1
+
 ds1$spl1[ds1$spl1<0]<-0 
 ds1$spl2[ds1$spl2<0]<-0 
 
-ds1[,c('date','index','spl1','spl2')]
+ds1[65:80,c('date','index','spl1','spl2')]
 ```
 
 Ok, now let's fit our spline model and look at results 
@@ -260,6 +279,8 @@ Ok, now let's fit our spline model and look at results
                  spl1+spl2+ #post-vaccine changes
                  offset(log.offset) , data=ds1)
 summary(mod4)
+
+#AIC(mod3,mod4)
 ```
 
 Get fitted and counterfactual for the spline model 
@@ -291,6 +312,7 @@ p7
 ```
 
 
+We can see here that the decline follows a smoother trajectory, by design
 
 ```{r}
 ds.pred.spl$rr.spline <- ds.pred.spl$pred.spl/ds.pred.spl$pred.spl.cf
@@ -309,7 +331,9 @@ p8
 First set the pneumonia variable to NA during the post-vaccine period
 ```{r}
 ds1$J12_J18_prim_pre <- ds1$J12_J18_prim
+
 ds1$J12_J18_prim_pre[which(ds1$date>=vax.intro.date)] <- NA
+
 ds1[,c('date','J12_J18_prim_pre' )]
 ```
 
@@ -358,10 +382,16 @@ As a rough estimate of this, let's just average the point-by-point estimates of 
 eval.period<-ds1$date> vax.eval.date
 
 rr.its.eval<- mean(ds.pred.its$rr.its[eval.period])
+
 rr.spline.eval<- mean(ds.pred.spl$rr.spline[eval.period])
+
 rr.trend.eval<- sum(ds.pred.mod5$J12_J18_prim[eval.period])/sum(ds.pred.mod5$pred.mod5[eval.period])
 
-c('ITS'=rr.its.eval,'Spline'=rr.spline.eval,'Trend Extrapolation'=rr.trend.eval )
+round(c('ITS'=rr.its.eval,'Spline'=rr.spline.eval,'Trend Extrapolation'=rr.trend.eval ),2)
+
+#Percent decline
+100*(1- round(c('ITS'=rr.its.eval,'Spline'=rr.spline.eval,'Trend Extrapolation'=rr.trend.eval ),2))
+
 ```
 
 *Depending on the dataset, these 3 methods might or might not agree*

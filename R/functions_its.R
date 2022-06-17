@@ -161,12 +161,11 @@ spline_func <- function(ds,
   ds$cos6<-cos(2*pi* ds$time_index/6)
   ds$month<-month(ds$date)
   
-  
- # month.dummies<-as.data.frame(dummies::dummy(ds$month))[,1:11]
-  
   ds$month <-as.factor(ds$month)
   month.dummies <- as.data.frame(model.matrix(~month, data=ds))
   month.dummies <- month.dummies[,-1]
+  
+  ds$one<-1
   
   ds$one<-1
   ds<-cbind.data.frame(ds, month.dummies)

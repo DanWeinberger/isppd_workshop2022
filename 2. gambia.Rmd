@@ -208,12 +208,12 @@ This counterfactual (red line in the plot) looks kind of crazy. Part of the prob
 
 Let's ditch trend and interaction between trend and post-period. We will then just be using the dummy variables to test whether the *average* number of cases changes.
 
-## ITS with dummy variables for post periods
+## ITS with dummy variables for post periods and trend adjustment
 
 ```{r}
 # Negative binomial model
 # Outcome: X-ray confirmed pneumonia (epc)
-mod2.epc <- glm.nb(epc ~ month +
+mod2.epc <- glm.nb(epc ~ month + index +
                      post1 + post2 + post3 +    
                      offset(log_pop),
                    data=ds1)
@@ -224,7 +224,7 @@ AIC(mod1.epc, mod2.epc)
 ```
 We can use some functions to make it easier to compare different models
 ```{r, fig.width=8, fig.height=4}
-mod2.epc.alt <- step_func(ds=ds1, outcome_name='epc', denom='mppop', mod='negbin', other.covars='none')
+mod2.epc.alt <- step_func(ds=ds1, outcome_name='epc', denom='mppop', mod='negbin', other.covars='index')
 
 plot.step.func(mod2.epc.alt)
 ```
@@ -273,10 +273,12 @@ mod1d <- step_func(ds=ds1, outcome_name='epc', denom='mppop', mod='negbin', othe
 
 mod1e <- spline_func(ds=ds1,outcome_name='epc', denom='mppop',other.covars= c('xray'), mod='negbin' )
 
+mod1f <- spline_func(ds=ds1,outcome_name='epc', denom='mppop',other.covars= c('xray', 'time_index'), mod='negbin' )
+
 # Extract results
-rr <- t(sapply(list(mod1a,mod1b, mod1c,mod1d,mod1e), '[[','rr.q.post'))
-rr
-aic <- t(sapply(list(mod1a,mod1b, mod1c,mod1d,mod1e), '[[','aic1'))
+rr <- t(sapply(list(mod1a,mod1b, mod1c,mod1d,mod1e,mod1f), '[[','rr.q.post'))
+round(rr,2)
+aic <- t(sapply(list(mod1a,mod1b, mod1c,mod1d,mod1e,mod1f), '[[','aic1'))
 aic
 #dispersion <- t(sapply(list(mod1a,mod1b, mod1c,mod1d,mod1e), '[[','overdispersion'))
 #dispersion
@@ -292,10 +294,16 @@ This suggests that the best model by AIC adjusts for XRays. Models 1b,c,e are si
 #-----*-----*-----*-----*-----*-----*-----*-----*-----#
 
 mod2a <- step_func(ds=ds1,outcome_name='pcv13st', denom='mppop', mod='pois')
+
 mod2b <- step_func(ds=ds1,outcome_name='pcv13st', denom='mppop', mod='pois', other.covars='xray')
+
 mod2c <- step_func(ds=ds1,outcome_name='pcv13st', denom='mppop', mod='pois', other.covars='spnpneumonia')
+
 mod2d <- step_func(ds=ds1,outcome_name='pcv13st', denom='mppop', mod='pois', other.covars= c('time_index'))
+
 mod2e <- spline_func(ds=ds1,outcome_name='pcv13st', denom='mppop', mod='pois', other.covars= c('spnpneumonia'))
+
+mod2f <- spline_func(ds=ds1,outcome_name='pcv13st', denom='mppop', mod='pois', other.covars= c('spnpneumonia','time_index'))
 
 rr <- t(sapply(list(mod2a,mod2b, mod2c,mod2d,mod2e), '[[','rr.q.post'))
 rr
@@ -314,15 +322,24 @@ Model E does best--adjusts for pneumococcal pneumonia (pcv13st is a subset of pn
 #-----*-----*-----*-----*-----*-----*-----*-----*-----#
 
 mod3a <- step_func(ds=ds1, outcome_name='spnpneumonia', denom='mppop', mod='pois')
+
 mod3b <- step_func(ds=ds1, outcome_name='spnpneumonia', denom='mppop', mod='pois', other.covars='xray' )
+
 mod3c <- step_func(ds=ds1, outcome_name='spnpneumonia', denom='mppop', mod='pois', other.covars= c('time_index'))
+
 mod3d <- spline_func(ds=ds1,outcome_name='spnpneumonia', denom='mppop', mod='pois', other.covars= c('xray'))
 
-rr <- t(sapply(list(mod3a,mod3b, mod3c,mod3d), '[[','rr.q.post'))
-rr
-aic <- t(sapply(list(mod3a,mod3b, mod3c,mod3d), '[[','aic1'))
+mod3e <- spline_func(ds=ds1,outcome_name='spnpneumonia', denom='mppop', mod='pois', other.covars= c('xray','time_index'))
+
+rr <- t(sapply(list(mod3a,mod3b, mod3c,mod3d,mod3e), '[[','rr.q.post'))
+
+round(rr,2)
+
+aic <- t(sapply(list(mod3a,mod3b, mod3c,mod3d,mod3e), '[[','aic1'))
 aic
+
 dispersion <- t(sapply(list(mod3a,mod3b, mod3c,mod3d), '[[','overdispersion'))
+
 dispersion
 ```
 
@@ -335,13 +352,19 @@ mod3c and mod3d are the best models. They give very different answers. Might con
 #-----*-----*-----*-----*-----*-----*-----*-----*-----#
 
 mod4a<-step_func(ds=ds1,outcome_name='clpnhypox', denom='mppop', mod='negbin')
+
 mod4b<-step_func(ds=ds1,outcome_name='clpnhypox', denom='mppop', mod='negbin', other.covars='xray')
+
 mod4c<-step_func(ds=ds1,outcome_name='clpnhypox', denom='mppop', mod='negbin', other.covars='time_index')
+
 mod4d<-spline_func(ds=ds1,outcome_name='clpnhypox', denom='mppop', mod='negbin', other.covars='xray')
 
-rr<-t(sapply(list(mod4a, mod4b, mod4c, mod4d), '[[','rr.q.post'))
+mod4e<-spline_func(ds=ds1,outcome_name='clpnhypox', denom='mppop', mod='negbin', other.covars=c('xray','time_index'))
+
+
+rr<-t(sapply(list(mod4a, mod4b, mod4c, mod4d,mod4e), '[[','rr.q.post'))
 rr
-aic<-t(sapply(list(mod4a,mod4b, mod4c,mod4d), '[[','aic1'))
+aic<-t(sapply(list(mod4a,mod4b, mod4c,mod4d,mod4e), '[[','aic1'))
 aic
 dispersion<-t(sapply(list(mod4a,mod4b, mod4c,mod4d), '[[','overdispersion'))
 dispersion
