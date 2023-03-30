@@ -16,6 +16,7 @@ library(lubridate)
 library(reshape2)
 library(MASS)
 library(ggplot2)
+library(dplyr)
 source('./R/functions_its.R')
 
 ```
@@ -55,16 +56,26 @@ We are working with monthly time series data for children <5 years of age captur
 Save the .csv file in the same directory as this .Rmd file, then read it in using the code below.
 
 ```{r}
-ds1<- read.csv('./Data/gambia_u5.csv') # or
+ds1<- read.csv('./Data/gambia_u5.csv') 
+```
+
+What variables do we have?
+
+```{r}
 names(ds1)
+```
+
+Structure of the data
+```{r}
 str(ds1)
 ```
 
-Declare the date variable as a date
+Declare the date variable as a date and sort by date
 ```{r}
-ds1$date <- as.Date(ds1$date)
+ds1 <- ds1 %>%
+  mutate( date  = as.Date(date) ) %>%
+  arrange(date) # sort by date
 
-ds1 <- ds1[order(ds1$date),]
 ```
 
 Dictionary: 
@@ -120,26 +131,19 @@ p2
 
 Will create disjointed segments
 ```{r}
-# Time index variable to control for long term linear trend
-ds1$index <- 1:nrow(ds1)
-ds1$index <- ds1$index/max(ds1$index) # Scale index variable so it varies from 0-1
-ds1$index
 
-# Monthly dummy variables to control for seasonality
-ds1$month <- as.factor(month(ds1$date)) # Extract month number, define as factor
-table(ds1$month)
+ds1 <- ds1 %>%
+  arrange(date) %>% #make sure it is sorted by date
+  mutate(index = row_number()/n(), #time index for linear trend, scale between 0,1
+         monthn=month(date),
+         month = as.factor(monthn), #declare month as a categorical variable
+           post1 = if_else(date >= "2009-08-01" & date < "2010-08-01" ,1, 0),
+           post2 = if_else(date >= "2010-08-01" & date < "2012-05-01" ,1, 0),
+           post3 = if_else(date >= "2012-05-01"  ,1, 0),
+           log_pop = log(mppop + 0.5)
+)
 
-# 3 dummy variables for post periods
-ds1$post1 <- 0
-ds1$post2 <- 0
-ds1$post3 <- 0
-ds1$post1[ds1$date >= "2009-08-01" & ds1$date < "2010-08-01"] <- 1 # First year of PCV7
-ds1$post2[ds1$date >= "2010-08-01" & ds1$date < "2012-05-01"] <- 1 # Post-PCV7 until PCV13 intro
-ds1$post3[ds1$date >= "2012-05-01"] <- 1 # Post-PCV13
-# View(ds1)
 
-# Offset is entered into the model as LOG of population size
-ds1$log_pop <- log(ds1$mppop + 0.5)
 
 time_points1 <- unique(ds1$date)
 
@@ -168,6 +172,7 @@ summary(mod1.epc)
 AIC(mod1.epc)
 
 ds.mod1 <- ds1
+
 # Model-fitted number of pneumonia cases
 ds.mod1$pred.epc <- predict(mod1.epc, type='response', newdata=ds.mod1)
 ```
@@ -175,11 +180,10 @@ ds.mod1$pred.epc <- predict(mod1.epc, type='response', newdata=ds.mod1)
 generate the counterfactuals
 ```{r}
 # Generate the counterfactual number of pneumonia cases
-ds1.counter <- ds.mod1
-ds1.counter$post1 <- 0
-ds1.counter$post2 <- 0
-ds1.counter$post3 <- 0
-# View(ds1.counter)
+ds1.counter <- ds.mod1 %>%
+  mutate(post1=0,
+         post2=0,
+         post3=0)
 
 ds.mod1$pred.epc.cf <- predict(mod1.epc, type='response', newdata=ds1.counter) # newdata is now "ds1.counter"
 
@@ -230,7 +234,7 @@ plot.step.func(mod2.epc.alt)
 ```
 
 
-The AIC score is not notably different than the model with the interactions, and it looks a lot cleaner. 
+The AIC score is not notably different than the model with the interactions (maybe better), and it looks a lot cleaner. 
 
 
 ## Other things we could think about
@@ -434,6 +438,3 @@ for(i in 1:length(best.models)){
 ## Summary
 
 For many of the outcomes, adjusting for X-Ray volume per month substantially cleaned up the estimates. This largely follows a pattern that we would expect, with larger declines for more specific outcomes. The decision about whether to adjust for linear time trend is tricky. AIC suggests that it improves the model fit in some instances. However, it also leads to some weird non-credible estimates in some instances as well.
-
-
-
