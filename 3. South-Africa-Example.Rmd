@@ -1,6 +1,6 @@
 ---
-title: 
-
+title: Evaluating Vaccine Impact in South Africa
+author: Dan Weinberger, Jackie Kleynhans
 output:
   rmdformats::readthedown:
     code_folding: show
@@ -24,6 +24,7 @@ Load the libraries we need for this exercise.
 ```{r}
 #install.packages(c('lubridate', 'RCurl','devtools','xtable','knitr','htmlTable','coda','rmdformats','httr'))
 #library(devtools) 
+#install.packages("INLA",repos=c(getOption("repos"),INLA="https://inla.r-inla-download.org/R/stable"), dep=TRUE)
 #devtools::install_github("https://github.com/weinbergerlab/InterventionEvaluatR", ref='InterventionEvaluatR-lite')
 
 library(lubridate)
@@ -36,9 +37,12 @@ library(rmdformats)
 library(httr)
 library(pbapply)
 library(INLA)
+library(zoo)
 library(xtable)
 library(reshape2)
+library(MASS)
 library(ggplot2)
+library(dplyr)
 
 ```
 
@@ -107,6 +111,84 @@ d2.m <- melt(d2, id.vars=c('date', 'age'))
    facet_wrap(~variable, scales='free')
  p3
 ```
+
+## First lets try this manually
+Let's focus on 1-11m old children
+
+```{r}
+
+mod.ds <- d2 %>%
+  arrange(age, date) %>%
+  group_by(age) %>%
+  mutate(index = row_number() ,
+         month=as.factor(month(date)),
+         Pneum.pre = if_else(date<"2009-04-01", Pneum, NA_real_)) %>%
+  filter(age=='1-11 months') 
+
+```
+
+Fit model to pre-vaccine period with no covariates--just month and trend adjustments
+```{r}
+mod1 <- glm.nb(Pneum.pre ~ month + index, data=mod.ds)
+
+mod.ds$pred1 <- predict(mod1, type='response', newdata=mod.ds)
+```
+
+
+```{r}
+p1 <- ggplot(mod.ds, aes(x=date, y=Pneum)) +
+  geom_line()+
+  theme_classic()
+
+p1 + 
+  geom_line(data=mod.ds, aes(x=date, y=pred1), color='red', lty=2)
+```
+
+```{r}
+mod.ds <- mod.ds %>%
+  mutate(log_A20 =log(A20_B99_a_D50_D89+0.5),
+         log_E00= log(E00_E89+0.5))
+
+mod2 <- glm.nb(Pneum.pre ~ month + index + log_A20, data=mod.ds)
+
+mod.ds$pred2 <- predict(mod2, type='response', newdata=mod.ds)
+
+
+mod3 <- glm.nb(Pneum.pre ~ month + index + log_E00, data=mod.ds)
+
+mod.ds$pred3 <- predict(mod3, type='response', newdata=mod.ds)
+
+p2 <- p1 + 
+  geom_line(data=mod.ds, aes(x=date, y=pred1), color='#1b9e77', lty=2) +
+  geom_line(data=mod.ds, aes(x=date, y=pred2), color='#d95f02', lty=3) +
+  geom_line(data=mod.ds, aes(x=date, y=pred3), color='#7570b3', lty=2) 
+  
+p2
+```
+
+Or smooth covariates first
+
+```{r}
+mod.ds <- mod.ds %>%
+  mutate(
+smooth_logA20 = rollapply(log_A20, align='right',FUN=mean, width=12,  partial=T) )
+
+plot(mod.ds$date, mod.ds$smooth_logA20, type='l')
+
+mod4 <- glm.nb(Pneum.pre ~ month + index + smooth_logA20, data=mod.ds)
+
+mod.ds$pred4 <- predict(mod4, type='response', newdata=mod.ds)
+
+p3 <- p2 + 
+  geom_line(data=mod.ds, aes(x=date, y=pred4), color='#b2df8a', lty=2)
+p3
+```
+
+
+
+
+
+
 
 
 
@@ -266,12 +348,12 @@ names(cum3)<-c('Stratum','Cases Averted (95% CrI)')
 ```
 
 
-Look at the betas--which are most influential?
+Look at the posterior probability of inclusion--which are most influential (avlue closer to 1)?
 
 ```{r}
-beta.check <- lapply(impact_results$full$groups,'[[','beta')
+beta.check <- lapply(impact_results$full$groups,'[[','inclusion_probs')
 
-beta.check <- lapply(beta.check,function(x) x[order(-abs(x[,1])),])
+beta.check <- lapply(beta.check,function(x) x[order(abs(x[,'inclusion_probs']) , decreasing=T) ,] )
 beta.check
 ```
 
